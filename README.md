@@ -1,11 +1,9 @@
 ## Cheap Kubernetes cluster on AWS with kubeadm
 
-[Forked from...](https://github.com/cablespaghetti/kubeadm-aws)
-
-This repository contains a bunch of Bash and Terraform code which provisions a single master Kubernetes cluster on AWS using spot instances. I have updated these scripts to work with kubernetes 1.16.4 and helm 2.14.1 but they are a not yet 100% reliable - sometimes
+This repository contains a bunch of Bash and Terraform code that provisions a single master Kubernetes cluster on AWS using spot instances. I have updated these scripts to work with Kubernetes 1.16.4 and Helm 2.14.1 but they are not 100% reliable - sometimes
 the master fails to initialize.
 
-Current features:
+### Current features:
 
 * Automatic backup and recovery. So if your master gets terminated, when the replacement is provisioned by AWS it will pick up where the old one left off without you doing anything. 😁
 * Completely automated provisioning through Terraform and Bash.
