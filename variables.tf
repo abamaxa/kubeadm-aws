@@ -45,7 +45,7 @@ locals {
 }
 
 variable "cluster-name" {
-  default = "k8s"
+  default = "k8cluster"
   description = "Controls the naming of the AWS resources"
 }
 
@@ -57,14 +57,13 @@ variable "secret_key" {
   default = ""
 }
 
-variable "k8s-ssh-key" {}
-
 variable "admin-cidr-blocks" {
   description = "A comma separated list of CIDR blocks to allow SSH connections from."
+  default= "92.186.17.79/32"
 }
 
 variable "region" {
-  default = "us-east-1"
+  default = "eu-west-2"
 }
 
 variable "az" {
@@ -72,27 +71,27 @@ variable "az" {
 }
 
 variable "kubernetes-version" {
-  default = "1.13.4"
+  default = "1.16.4"
   description = "Which version of Kubernetes to install"
 }
 
 variable "master-instance-type" {
-  default = "m1.small"
+  default = "t3a.medium"
   description = "Which EC2 instance type to use for the master nodes"
 }
 
 variable "master-spot-price" {
-  default = "0.01"
+  default = "0.05"
   description = "The maximum spot bid for the master node"
 }
 
 variable "worker-instance-type" {
-  default = "m1.small"
+  default = "t3a.medium"
   description = "Which EC2 instance type to use for the worker nodes"
 }
 
 variable "worker-spot-price" {
-  default = "0.01"
+  default = "0.05"
   description = "The maximum spot bid for worker nodes"
 }
 

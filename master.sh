@@ -17,8 +17,8 @@ apt-get install -y kubelet=${k8sversion}-00 kubeadm=${k8sversion}-00 kubectl=${k
 apt-mark hold kubelet kubeadm kubectl docker.io
 
 # Install etcdctl for the version of etcd we're running
-ETCD_VERSION=$(kubeadm config images list | grep etcd | cut -d':' -f2)
-wget "https://github.com/coreos/etcd/releases/download/v$${ETCD_VERSION}/etcd-v$${ETCD_VERSION}-linux-amd64.tar.gz"
+ETCD_VERSION=$(kubeadm config images list | grep etcd | cut -d':' -f2 | cut -d'-' -f1)
+wget "https://github.com/etcd-io/etcd/releases/download/v$${ETCD_VERSION}/etcd-v$${ETCD_VERSION}-linux-amd64.tar.gz"
 tar xvf "etcd-v$${ETCD_VERSION}-linux-amd64.tar.gz"
 mv "etcd-v$${ETCD_VERSION}-linux-amd64/etcdctl" /usr/local/bin/
 rm -rf etcd*
@@ -29,6 +29,7 @@ mkdir /mnt/docker
 chmod 711 /mnt/docker
 cat <<EOF > /etc/docker/daemon.json
 {
+    "exec-opts": ["native.cgroupdriver=systemd"],
     "data-root": "/mnt/docker",
     "log-driver": "json-file",
     "log-opts": {
@@ -50,7 +51,7 @@ mkdir /mnt/kubelet
 echo 'KUBELET_EXTRA_ARGS="--root-dir=/mnt/kubelet --cloud-provider=aws"' > /etc/default/kubelet
 
 cat >init-config.yaml <<EOF
-apiVersion: kubeadm.k8s.io/v1alpha3
+apiVersion: kubeadm.k8s.io/v1beta2
 kind: InitConfiguration
 bootstrapTokens:
 - groups:
@@ -61,12 +62,14 @@ nodeRegistration:
   name: "$(hostname -f)"
   taints: []
 ---
-apiVersion: kubeadm.k8s.io/v1alpha3
+apiVersion: kubeadm.k8s.io/v1beta2
 kind: ClusterConfiguration
-apiServerExtraArgs:
-  cloud-provider: aws
-controllerManagerExtraArgs:
-  cloud-provider: aws
+apiServer:
+  extraArgs:
+    cloud-provider: aws
+controllerManager:
+  extraArgs:
+    cloud-provider: aws
 networking:
   podSubnet: 10.244.0.0/16
 EOF
@@ -92,10 +95,10 @@ if [ $(aws s3 ls s3://${s3bucket}/etcd-backups/ | wc -l) -ne 0 ]; then
   mv default.etcd/member /var/lib/etcd/
 
   echo "Running kubeadm init"
-  kubeadm init --ignore-preflight-errors="DirAvailable--var-lib-etcd,NumCPU" --config=init-config.yaml
+  kubeadm init --ignore-preflight-errors="DirAvailable--var-lib-etcd,NumCPU" --config=init-config.yaml --v=5
 else
   echo "Running kubeadm init"
-  kubeadm init --config=init-config.yaml --ignore-preflight-errors=NumCPU
+  kubeadm init --config=init-config.yaml --ignore-preflight-errors=NumCPU --v=5
   touch /tmp/fresh-cluster
 fi
 
@@ -104,27 +107,30 @@ echo "net.bridge.bridge-nf-call-iptables = 1" > /etc/sysctl.d/60-flannel.conf
 service procps start
 
 # Set up kubectl for the ubuntu user
-mkdir -p /home/ubuntu/.kube && cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config && chown -R ubuntu. /home/ubuntu/.kube
+mkdir -p /home/ubuntu/.kube && cp /etc/kubernetes/admin.conf /home/ubuntu/.kube/config && chown -R ubuntu. /home/ubuntu/.kube
 echo 'source <(kubectl completion bash)' >> /home/ubuntu/.bashrc
 
 # Install helm
-wget https://storage.googleapis.com/kubernetes-helm/helm-v2.12.0-linux-amd64.tar.gz
-tar xvf helm-v2.12.0-linux-amd64.tar.gz
+wget https://storage.googleapis.com/kubernetes-helm/helm-v2.14.1-linux-amd64.tar.gz
+tar xvf helm-v2.14.1-linux-amd64.tar.gz
 mv linux-amd64/helm /usr/local/bin/
 rm -rf linux-amd64 helm-*
 
 if [ -f /tmp/fresh-cluster ]; then
-  su -c 'kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/13a990bb716c82a118b8e825b78189dcfbfb2f1e/Documentation/kube-flannel.yml' ubuntu
+  su -c 'kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml' ubuntu
 
   # Set up helm
   su -c 'kubectl create serviceaccount tiller --namespace=kube-system' ubuntu
   su -c 'kubectl create clusterrolebinding tiller-admin --serviceaccount=kube-system:tiller --clusterrole=cluster-admin' ubuntu
-  su -c 'helm init --service-account=tiller' ubuntu
+  su -c "helm init --service-account tiller --override spec.selector.matchLabels.'name'='tiller',spec.selector.matchLabels.'app'='helm' --output yaml | sed 's@apiVersion: extensions/v1beta1@apiVersion: apps/v1@' | kubectl apply -f -" ubuntu
 
   # Install cert-manager
   if [[ "${certmanagerenabled}" == "1" ]]; then
     sleep 60 # Give Tiller a minute to start up
-    su -c 'helm install --name cert-manager --namespace cert-manager --version 0.5.2 stable/cert-manager --set createCustomResource=false && helm upgrade --install --namespace cert-manager --version 0.5.2 cert-manager stable/cert-manager --set createCustomResource=true' ubuntu
+    su -c "kubectl apply --validate=false -f https://raw.githubusercontent.com/jetstack/cert-manager/v0.12.0/deploy/manifests/00-crds.yaml" ubuntu
+    su -c "helm repo add jetstack https://charts.jetstack.io" ubuntu
+    su -c "helm repo update" ubuntu
+    su -c 'helm install --name cert-manager --namespace cert-manager jetstack/cert-manager --set createCustomResource=false && helm upgrade --install --namespace cert-manager cert-manager jetstack/cert-manager --set createCustomResource=true' ubuntu
   fi
 
   # Install all the YAML we've put on S3
@@ -159,7 +165,7 @@ if [[ "${backupenabled}" == "1" ]]; then
 	echo "Polling $${NOTICE_URL} every $${POLL_INTERVAL} second(s)"
 	
 	# To whom it may concern: http://superuser.com/questions/590099/can-i-make-curl-fail-with-an-exitcode-different-than-0-if-the-http-status-code-i
-	while http_status=$(curl -o /dev/null -w '%{http_code}' -sL $${NOTICE_URL}); [ $${http_status} -ne 200 ]; do
+	while http_status=$(curl -o /dev/null -w '%%{http_code}' -sL $${NOTICE_URL}); [ $${http_status} -ne 200 ]; do
 	  echo "Polled termination notice URL. HTTP Status was $${http_status}."
 	  sleep $${POLL_INTERVAL}
 	done
@@ -184,6 +190,7 @@ if [[ "${backupenabled}" == "1" ]]; then
 	WantedBy=multi-user.target
 	EOF
 
+  systemctl daemon-reload
   systemctl start check-termination
   systemctl enable check-termination
 fi

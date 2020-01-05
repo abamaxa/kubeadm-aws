@@ -22,6 +22,7 @@ mkdir /mnt/docker
 chmod 711 /mnt/docker
 cat <<EOF > /etc/docker/daemon.json
 {
+    "exec-opts": ["native.cgroupdriver=systemd"],
     "data-root": "/mnt/docker",
     "log-driver": "json-file",
     "log-opts": {

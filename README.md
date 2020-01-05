@@ -1,22 +1,22 @@
-## Really cheap Kubernetes cluster on AWS with kubeadm
+## Cheap Kubernetes cluster on AWS with kubeadm
 
-**This project no longer seems to be working and I have stopped working on it. Feel free to fork it and/or use it as the basis for your own experiments.**
+[Forked from...](https://github.com/cablespaghetti/kubeadm-aws)
 
-This repository contains a bunch of Bash and Terraform code which provisions what I believe to be the cheapest possible single master Kubernetes cluster on AWS. You can run a 1 master, 1 worker cluster for somewhere around $6 a month, or just the master node (which can also run pods) for around $3 a month.
-
-To achieve this, it uses m1.small spot instances and the free ephemeral storage they come with instead of EBS volumes.
+This repository contains a bunch of Bash and Terraform code which provisions a single master Kubernetes cluster on AWS using spot instances. I have updated these scripts to work with kubernetes 1.16.4 and helm 2.14.1 but they are a not yet 100% reliable - sometimes
+the master fails to initialize.
 
 Current features:
 
 * Automatic backup and recovery. So if your master gets terminated, when the replacement is provisioned by AWS it will pick up where the old one left off without you doing anything. 😁
 * Completely automated provisioning through Terraform and Bash.
 * Variables for many things including number of workers (provisioned using an auto-scaling group) and EC2 instance type.
-* Helm Tiller (currently v2.12.0)
+* Helm (currently v2.14.1)
+* Kubernetes v1.16.4.
+* Supports EBS storage based images e.g. t3.medium.
 * [External DNS](https://github.com/kubernetes-incubator/external-dns) and [Nginx Ingress](https://github.com/kubernetes/ingress-nginx) as a cheap ELB alternative, with [Cert Manager](https://github.com/jetstack/cert-manager) for TLS certificates via Let's Encrypt.
 * Auto Scaling of worker nodes, if you enable the [Cluster AutoScaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
 * Persistent Volumes using GP2 storage on EBS.
 
-**Please use the releases rather than pulling from master. Master may be untested at any given point in time.**
 **This isn't designed for production (unless you're very brave) but I've found no stability issues so far for my personal development usage. However I have had instances where there is no available spot capacity for my chosen instance type in my Availability Zone which means you are without any nodes for a while...**
 
 ### Run it!

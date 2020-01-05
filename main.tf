@@ -25,25 +25,25 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 */
 
 provider "aws" {
-  version    = "~> 1.48"
+  version    = "~> 2.7"
   access_key = "${var.access_key}"
   secret_key = "${var.secret_key}"
   region     = "${var.region}"
 }
 
 provider "template" {
-  version    = "1.0.0"
+  version    = "2.1"
 }
 
 provider "random" {
-  version    = "2.0.0"
+  version    = "2.1"
 }
 
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   enable_dns_hostnames = true
 
-  tags {
+  tags = {
     Name = "${var.cluster-name}"
     Environment = "${var.cluster-name}"
   }
@@ -52,7 +52,7 @@ resource "aws_vpc" "main" {
 resource "aws_internet_gateway" "gw" {
   vpc_id = "${aws_vpc.main.id}"
 
-  tags {
+  tags = {
     Name = "${var.cluster-name}"
     Environment = "${var.cluster-name}"
   }
@@ -68,7 +68,7 @@ resource "aws_route_table" "r" {
 
   depends_on = ["aws_internet_gateway.gw"]
 
-  tags {
+  tags = {
     Name = "${var.cluster-name}"
     Environment = "${var.cluster-name}"
   }
@@ -85,7 +85,7 @@ resource "aws_subnet" "public" {
   availability_zone = "${var.region}${var.az}"
   map_public_ip_on_launch = true
 
-  tags {
+  tags = {
     Name = "${var.cluster-name}"
     Environment = "${var.cluster-name}"
   }
@@ -96,7 +96,7 @@ resource "aws_security_group" "kubernetes" {
   description = "Allow inbound ssh traffic"
   vpc_id = "${aws_vpc.main.id}"
 
-  tags {
+  tags = {
     Name = "${var.cluster-name}"
     Environment = "${var.cluster-name}"
   }
@@ -166,7 +166,7 @@ resource "aws_s3_bucket" "s3-bucket" {
   bucket_prefix   = "${var.cluster-name}"
   force_destroy   = "true"
 
-  tags {
+  tags = {
     Environment = "${var.cluster-name}"
   }
 
@@ -207,7 +207,7 @@ resource "aws_s3_bucket_object" "nginx-ingress-manifest" {
 data "template_file" "nginx-ingress-nodeport-manifest" {
   count  = "${var.nginx-ingress-enabled}"
   template = "${file("manifests/nginx-ingress-nodeport.yaml.tmpl")}"
-  vars {
+  vars = {
     nginx_ingress_domain = "${var.nginx-ingress-domain}"
   }
 }
@@ -215,13 +215,13 @@ resource "aws_s3_bucket_object" "nginx-ingress-nodeport-manifest" {
   count  = "${var.nginx-ingress-enabled}"
   bucket = "${aws_s3_bucket.s3-bucket.id}"
   key    = "manifests/nginx-ingress-nodeport.yaml"
-  content = "${data.template_file.nginx-ingress-nodeport-manifest.rendered}"
-  etag   = "${md5(data.template_file.nginx-ingress-nodeport-manifest.rendered)}"
+  content = "${data.template_file.nginx-ingress-nodeport-manifest[count.index].rendered}"
+  etag   = "${md5(data.template_file.nginx-ingress-nodeport-manifest[count.index].rendered)}"
 }
 
 data "template_file" "cluster-autoscaler-manifest" {
   template = "${file("manifests/cluster-autoscaler-autodiscover.yaml.tmpl")}"
-  vars {
+  vars = {
     cluster_name = "${var.cluster-name}"
     cluster_region = "${var.region}"
   }
@@ -236,7 +236,7 @@ resource "aws_s3_bucket_object" "cluster-autoscaler-manifest" {
 
 data "template_file" "cert-manager-issuer-manifest" {
   template = "${file("manifests/cert-manager-issuer.yaml.tmpl")}"
-  vars {
+  vars = {
     cert_manager_email = "${var.cert-manager-email}"
   }
 }
@@ -248,24 +248,24 @@ resource "aws_s3_bucket_object" "cert-manager-issuer-manifest" {
   etag   = "${md5(data.template_file.cert-manager-issuer-manifest.rendered)}"
 }
 
-data "template_file" "master-userdata" {
-  template = "${file("master.sh")}"
+# data "template_file" "master-userdata" {
+#   template = "${file("master.sh")}"
 
-  vars {
-    k8stoken = "${local.k8stoken}"
-    clustername = "${var.cluster-name}"
-    s3bucket = "${aws_s3_bucket.s3-bucket.id}"
-    backupcron = "${var.backup-cron-expression}"
-    k8sversion = "${var.kubernetes-version}"
-    backupenabled = "${var.backup-enabled}"
-    certmanagerenabled = "${var.cert-manager-enabled}"
-  }
-}
+#   vars = {
+#     k8stoken = "${local.k8stoken}"
+#     clustername = "${var.cluster-name}"
+#     s3bucket = "${aws_s3_bucket.s3-bucket.id}"
+#     backupcron = "${var.backup-cron-expression}"
+#     k8sversion = "${var.kubernetes-version}"
+#     backupenabled = "${var.backup-enabled}"
+#     certmanagerenabled = "${var.cert-manager-enabled}"
+#   }
+# }
 
 data "template_file" "worker-userdata" {
   template = "${file("worker.sh")}"
 
-  vars {
+  vars = {
     k8stoken = "${local.k8stoken}"
     masterIP = "10.0.100.4"
     k8sversion = "${var.kubernetes-version}"
@@ -275,7 +275,12 @@ data "template_file" "worker-userdata" {
 data "aws_ami" "latest_ami" {
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-instance/ubuntu-bionic-18.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"]
+  }
+
+  filter {
+    name = "virtualization-type"
+    values = ["hvm"]
   }
 
   most_recent = true
@@ -371,7 +376,7 @@ EOF
 resource "aws_iam_role_policy_attachment" "autoscaling" {
   count      = "${var.cluster-autoscaler-enabled}"
   role       = "${aws_iam_role.role.name}"
-  policy_arn = "${aws_iam_policy.autoscaling.arn}"
+  policy_arn = "${aws_iam_policy.autoscaling[count.index].arn}"
 }
 
 resource "aws_iam_role_policy_attachment" "cluster-policy" {
@@ -435,7 +440,7 @@ EOF
 resource "aws_iam_role_policy_attachment" "route53-policy" {
   count      = "${var.external-dns-enabled}"
   role       = "${aws_iam_role.role.name}"
-  policy_arn = "${aws_iam_policy.route53-policy.arn}"
+  policy_arn = "${aws_iam_policy.route53-policy[count.index].arn}"
 }
 
 resource "aws_iam_instance_profile" "profile" {
@@ -443,12 +448,26 @@ resource "aws_iam_instance_profile" "profile" {
   role = "${aws_iam_role.role.name}"
 }
 
+resource "aws_key_pair" "deployer" {
+  key_name   = "k8-ssh-key"
+  public_key = file("~/.ssh/id_rsa.pub")
+}
+
 resource "aws_spot_instance_request" "master" {
   ami           = "${data.aws_ami.latest_ami.id}"
   instance_type = "${var.master-instance-type}"
   subnet_id = "${aws_subnet.public.id}"
-  user_data = "${data.template_file.master-userdata.rendered}"
-  key_name = "${var.k8s-ssh-key}"
+  #user_data = "${data.template_file.master-userdata.rendered}"
+  user_data = templatefile("${path.module}/master.sh", {
+    k8stoken = "${local.k8stoken}"
+    clustername = "${var.cluster-name}"
+    s3bucket = "${aws_s3_bucket.s3-bucket.id}"
+    backupcron = "${var.backup-cron-expression}"
+    k8sversion = "${var.kubernetes-version}"
+    backupenabled = "${var.backup-enabled}"
+    certmanagerenabled = "${var.cert-manager-enabled}"
+  })
+  key_name =  aws_key_pair.deployer.key_name
   iam_instance_profile   = "${aws_iam_instance_profile.profile.name}"
   vpc_security_group_ids = ["${aws_security_group.kubernetes.id}"]
   spot_price = "${var.master-spot-price}"
@@ -458,7 +477,7 @@ resource "aws_spot_instance_request" "master" {
 
   depends_on = ["aws_internet_gateway.gw"]
 
-  tags {
+  tags = {
     Name = "${var.cluster-name}-master"
     Environment = "${var.cluster-name}"
   }
@@ -472,11 +491,14 @@ resource "aws_spot_instance_request" "master" {
 
 # Spot ASG for workers
 resource "aws_launch_template" "worker" {
-  iam_instance_profile        = { name = "${aws_iam_instance_profile.profile.name}" }
+  iam_instance_profile { 
+    name = "${aws_iam_instance_profile.profile.name}" 
+  }
+
   image_id                    = "${data.aws_ami.latest_ami.id}"
   name                        = "${var.cluster-name}-worker"
   vpc_security_group_ids      = ["${aws_security_group.kubernetes.id}"]
-  key_name                    = "${var.k8s-ssh-key}"
+  key_name                    =  aws_key_pair.deployer.key_name
   instance_type               = "${var.worker-instance-type}"
   user_data                   = "${base64encode(data.template_file.worker-userdata.rendered)}"
   ebs_optimized               = false
@@ -496,7 +518,7 @@ resource "aws_autoscaling_group" "worker" {
 
   launch_template {
     id = "${aws_launch_template.worker.id}"
-    version = "$$Latest"
+    version = "$Latest"
   }
 
   tag {
