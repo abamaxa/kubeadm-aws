@@ -23,10 +23,10 @@ Current features:
 
 1. Clone the repo
 2. [Install Terraform](https://www.terraform.io/intro/getting-started/install.html)
-3. Make an SSH key on us-east-1 from the AWS console
-4. Run terraform plan: `terraform plan -var k8s-ssh-key=<aws-ssh-key-name> -var admin-cidr-blocks="<my-public-ip-address>/32"`
-5. Build out infrastructure: `terraform apply -var k8s-ssh-key=<aws-ssh-key-name> -var admin-cidr-blocks="<my-public-ip-address>/32"`
-6. SSH to K8S master and run something: `ssh ubuntu@$(terraform output master_dns) -i <aws-ssh-key-name>.pem kubectl get no`
+3. Make an SSH key locally in `~/.ssh/id_rsa.pub`
+4. Run terraform plan: `terraform plan -var admin-cidr-blocks="<my-public-ip-address>/32"`
+5. Build out infrastructure: `terraform apply -var admin-cidr-blocks="<my-public-ip-address>/32"`
+6. SSH to K8S master and run something: `ssh ubuntu@$(terraform output master_dns) kubectl get no`
 7. If you enabled cert-manager, the [Cert Manager Issuer](manifests/cert-manager-issuer.yaml.tmpl) for Let's Encrypt has been applied to the default namespace. You will also need to apply it to any other namespaces you want to obtain TLS certificates for.
 8. Done!
 
@@ -34,9 +34,9 @@ Optional Variables:
 
 * `min-worker-count` - The minimum size of the worker node Auto-Scaling Group (1 by default)
 * `max-worker-count` - The maximum size of the worker node Auto-Scaling Group (1 by default)
-* `region` - Which AWS region to use (us-east-1 by default)
+* `region` - Which AWS region to use (eu-west-2 by default)
 * `az` - Which AWS availability zone to use (a by default)
-* `kubernetes-version` - Which Kubernetes/kubeadm version to install (1.13.4 by default)
+* `kubernetes-version` - Which Kubernetes/kubeadm version to install (1.16.4 by default)
 * `master-instance-type` - Which EC2 instance type to use for the master node (m1.small by default)
 * `master-spot-price` - The maximum spot bid for the master node ($0.01 by default)
 * `worker-instance-type` - Which EC2 instance type to use for the worker nodes (m1.small by default)
@@ -57,13 +57,7 @@ Optional Variables:
 
 ### Ingress Notes
 
-As hinted above, this uses Nginx Ingress as an alternative to a Load Balancer. This is done by exposing ports 443 and 80 directly on each of the nodes (Workers and the Master) using a NodePort type Service. Unfortunately External DNS doesn't seem to work with Nginx Ingress when you expose it in this way, so I've had to just map a single DNS name (using the nginx-ingress-domain variable) to the NodePort service itself. External DNS will keep that entry up to date with the IPs of the nodes in the cluster; you will then have to manually add CNAME entries for your individual services.
-
-I am well aware that this isn't the most secure way of exposing services, but it's secure enough for my purposes. If anyone has any suggestions on a better way of doing this without shelling out $20 a month for an ELB, please open an Issue!
-
-### Contributing
-
-I've written this as a personal project and will do my best to maintain it to a good standard, despite having very limited free time. I very much welcome contributions in the form of Pull Requests and Issues (for both bugs and feature requests).
+As hinted above, this uses Nginx Ingress as an alternative to a Load Balancer. This is done by exposing ports 443 and 80 directly on each of the nodes (Workers and the Master) using a NodePort type Service. Unfortunately External DNS doesn't seem to work with Nginx Ingress when you expose it in this way, so I've had to just map a single DNS name (using the nginx-ingress-domain variable) to the NodePort service itself. External DNS will keep that entry up to date with the IPs of the nodes in the cluster; you will then have to manually add CNAME entries for your individual services. Not the most secure way of exposing services, but it's secure enough for my purposes.
 
 ### Note about the license
 
