@@ -23,6 +23,14 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 */
 
+output "k8s_token" {
+  value = "${local.k8stoken}"
+}
+
+output "s3_bucket" {
+  value = "${aws_s3_bucket.s3-bucket.id}"
+}
+
 output "master_dns" {
   value = "${aws_spot_instance_request.master.public_dns}"
 }
