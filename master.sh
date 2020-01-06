@@ -132,6 +132,7 @@ if [ -f /tmp/fresh-cluster ]; then
     su -c "helm repo add jetstack https://charts.jetstack.io" ubuntu
     su -c "helm repo update" ubuntu
     su -c 'helm install --name cert-manager --namespace cert-manager jetstack/cert-manager --set createCustomResource=false && helm upgrade --install --namespace cert-manager cert-manager jetstack/cert-manager --set createCustomResource=true' ubuntu
+    sleep 60 # let cert-manager finish starting or we may get an error on cert-manager-issuer.yaml
   fi
 
   # Install all the YAML we've put on S3
